@@ -9,8 +9,8 @@ sed -i '/^.*pgrep -f restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect
 sed -i '/^.*pgrep -f \/etc\/arca\/restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
 sed -i '/if \[ -e \/etc\/arca\/restart_wan \].*$/,/fi/d' /usr/lib/rooter/connect/create_connect.sh
 
-if [ $(uname -a | cut -d' ' -f2) != "QWRT" ]; then
-        echo "Only QWRT is supported"
+if [ $(uname -a | cut -d' ' -f2) != "AW1K" ]; then
+        echo "Only AW1K is supported"
         exit 1
 fi
 
