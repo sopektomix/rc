@@ -9,8 +9,8 @@ sed -i '/^.*pgrep -f restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect
 sed -i '/^.*pgrep -f \/etc\/arca\/restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
 sed -i '/if \[ -e \/etc\/arca\/restart_wan \].*$/,/fi/d' /usr/lib/rooter/connect/create_connect.sh
 
-if [ $(uname -a | cut -d' ' -f2) != "AW1K" ]; then
-        echo "Only AW1K is supported"
+if [ $(uname -a | cut -d' ' -f2) != "QWRT" ]; then
+        echo "Only QWRT is supported"
         exit 1
 fi
 
@@ -81,7 +81,7 @@ fi
 
 >/tmp/wan_status
 while true; do
-        t=$(ping -c10 8.8.8.8 | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
+        t=$(ping -c10 google.com | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
         if [ ! "$t" -eq 0 ]; then
                 echo -e "$(date) \t Internet is fine" >>/tmp/wan_status
         else
@@ -128,5 +128,5 @@ fi
 
 chmod 755 /etc/arca/change_ip
 /etc/arca/change_ip &
-echo "Siap. Awak boleh tutup terminal dan pergi basuh kaki"
+echo "Done. You can close this terminal now"
 exit 0
