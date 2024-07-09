@@ -81,7 +81,7 @@ fi
 
 >/tmp/wan_status
 while true; do
-        t=$(ping -c10 google.com | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
+        t=$(ping -c10 8.8.8.8 | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
         if [ ! "$t" -eq 0 ]; then
                 echo -e "$(date) \t Internet is fine" >>/tmp/wan_status
         else
