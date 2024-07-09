@@ -7,10 +7,10 @@ Both QMI and MBIM protocols are supported.
 
 # Install
 ```
-wget -q -O installer.sh https://raw.githubusercontent.com/abidarwish/rc/main/installer.sh; sh installer.sh
+wget -q -O installer.sh https://raw.githubusercontent.com/sopektomix/rc/main/installer.sh; sh installer.sh
 ```
 
 # Remove
 ```
-wget -q -O remove.sh https://raw.githubusercontent.com/abidarwish/rc/main/remove.sh; sh remove.sh
+wget -q -O remove.sh https://raw.githubusercontent.com/sopektomix/rc/main/remove.sh; sh remove.sh
 ```
