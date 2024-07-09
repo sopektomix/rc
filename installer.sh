@@ -57,7 +57,7 @@ cat << 'EOF' >/etc/arca/change_ip
 PDPTYPE=$(uci -q get modem.modem1.pdptype)
 APN=$(uci -q get modem.modem1.apn)
 
-[ $(pgrep -f /etc/arca/change_ip | wc -l) -gt 2 ] && exit 0
+[ $(pgrep -f /etc/arca/change_ip | wc -l) -gt 5 ] && exit 0
 
 QMIChangeWANIP() {
         /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=0 >/dev/null 2>&1 && /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=1 >/dev/null 2>&1
@@ -81,7 +81,8 @@ fi
 
 >/tmp/wan_status
 while true; do
-        if [ $(curl -I -s -o /dev/null -w "%{http_code}" --max-time 10 https://www.youtube.com) -eq 200 ] && [ $(curl -I -s -o /dev/null -w "%{http_code}" --max-time 10 https://fast.com) -eq 200 ]; then
+        t=$(ping -c10 google.com | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
+        if [ ! "$t" -eq 0 ]; then
                 echo -e "$(date) \t Internet is fine" >>/tmp/wan_status
         else
                 log "Modem disconnected"
@@ -100,12 +101,13 @@ while true; do
                 else
                         n=$(( $n + 1 ))
                         echo "$n" >/etc/arca/counter
-                        if [ $(cat /etc/arca/counter) -eq 2 ]; then
+                        if [ $(cat /etc/arca/counter) -eq 5 ]; then
                                 /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 "AT+CFUN=1,1"
                                 log "Modem module restarted"
-                        elif [ $(cat /etc/arca/counter) -ge 3 ]; then
+                        elif [ $(cat /etc/arca/counter) -ge 6 ]; then
                                 log "Modem disconnected. Check your SIM card"
                                 >/etc/arca/counter
+                                reboot
                                 exit 1
                         fi
                 fi
