@@ -1,132 +1,73 @@
 #!/bin/sh
-#script by Abi Darwish
 
 rm -rf $0
-
-#Cleanup from previous beta installation
 rm -rf /etc/arca/restart_wan
-sed -i '/^.*pgrep -f restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/^.*pgrep -f \/etc\/arca\/restart_wan/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/if \[ -e \/etc\/arca\/restart_wan \].*$/,/fi/d' /usr/lib/rooter/connect/create_connect.sh
-
-if [ $(uname -a | cut -d' ' -f2) != "QWRT" ]; then
-        echo "Only QWRT is supported"
-        exit 1
-fi
-
-if [ "$(cat /tmp/sysinfo/model)" != "Arcadyan AW1000" ]; then
-        echo "Only Arcadyan AW1000 is supported"
-        exit 1
-fi
-
-if [ ! -e /etc/arca ]; then
-        mkdir -p /etc/arca
-fi
-
-if [ ! -e /usr/lib/rooter/connect/create_connect.sh.bak ]; then
-        cp /usr/lib/rooter/connect/create_connect.sh /usr/lib/rooter/connect/create_connect.sh.bak
-fi
-
-#Initialize
-sed -i '/^.*pgrep -f change_ip/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/^.*pgrep -f \/etc\/arca\/change_ip/d;/^$/d' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/#!\/bin\/sh/a\\nkill -9 \$\(pgrep -f change_ip)' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/#!\/bin\/sh/a\\nkill -9 \$\(pgrep -f \/etc\/arca\/change_ip)' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/if \[ -e \/etc\/arca\/change_ip \].*$/,/fi/d' /usr/lib/rooter/connect/create_connect.sh
-sed -i '/\/etc\/arca\/counter/d' /etc/init.d/rooter
-sed -i '/.*initialize.sh/a\\t>\/etc\/arca\/counter' /etc/init.d/rooter
-sed -i '/.*start-quectel.sh/a\\t>\/etc\/arca\/counter' /etc/init.d/rooter
+rm -rf /etc/arca/change_ip
 >/etc/arca/counter
+mkdir -p /etc/arca
 
-if [ ! -e /usr/lib/rooter/connect/conmon.sh.bak ]; then
-        cp /usr/lib/rooter/connect/conmon.sh /usr/lib/rooter/connect/conmon.sh.bak
-        chmod -x /usr/lib/rooter/connect/conmon.sh.bak
-fi
+log() {
+    echo "$(date): $@" >> /etc/arca/log
+}
 
-echo -e "#!/bin/sh
-#script by Abi Darwish
-
-if [ -e /etc/arca/change_ip ]; then
-        /etc/arca/change_ip &
-fi" >/usr/lib/rooter/connect/conmon.sh
+restart_wan_mm() {
+    local modem_id=$(mmcli -L | grep -o -E 'Modem\/[0-9]+' | cut -d'/' -f2)
+    if [ -z "$modem_id" ]; then
+        log "No modem detected via ModemManager"
+        return 1
+    fi
+    mmcli -m $modem_id --disable
+    sleep 2
+    mmcli -m $modem_id --enable
+    sleep 10
+    mmcli -m $modem_id --simple-connect="apn=$(uci get modem.modem1.apn)"
+    log "ModemManager WAN restarted for modem ID $modem_id"
+}
 
 cat << 'EOF' >/etc/arca/change_ip
 #!/bin/sh
-#script by Abi Darwish
-
-PDPTYPE=$(uci -q get modem.modem1.pdptype)
-APN=$(uci -q get modem.modem1.apn)
-
-[ $(pgrep -f /etc/arca/change_ip | wc -l) -gt 5 ] && exit 0
-
-QMIChangeWANIP() {
-        /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=0 >/dev/null 2>&1 && /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=1 >/dev/null 2>&1
-}
-
-MBIMChangeWANIP() {
-        /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=0 >/dev/null 2>&1 && /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 "AT+CGDCONT=1,\"${PDPTYPE}\",\"${APN}\"" >/dev/null 2>&1 && /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 AT+CFUN=1 >/dev/null 2>&1 && ifup wan && ifup wan1
-}
 
 log() {
-        modlog "$@"
+    echo "$(date): $@" >> /etc/arca/log
 }
 
-log "Start RC script"
-
-if [ $(cat /etc/arca/counter | wc -l) -eq 0 ]; then
-        n=0
-else
-        n=$(cat /etc/arca/counter)
-fi
-
->/tmp/wan_status
-while true; do
-        t=$(ping -c10 google.com | grep -o -E '[0-9]+ packets r' | grep -o -E '[0-9]+')
-        if [ ! "$t" -eq 0 ]; then
-                echo -e "$(date) \t Internet is fine" >>/tmp/wan_status
+monitor_connection() {
+    while true; do
+        if ! ping -c 5 -q google.com > /dev/null 2>&1; then
+            log "Internet disconnected. Attempting to reconnect..."
+            restart_wan_mm
         else
-                log "Modem disconnected"
-                if [ $(uci -q get modem.modem1.proto) -eq 88 ]; then
-                        QMIChangeWANIP
-                        log "QMI Protocol restarted"
-                else
-                        MBIMChangeWANIP
-                        log "MBIM Protocol restarted"
-                fi
-                sleep 10
-                WAN_IP=$(curl ifconfig.me)
-                if [ ! -z ${WAN_IP} ]; then
-                        log "WAN IP changed to ${WAN_IP}"
-                        >/etc/arca/counter
-                else
-                        n=$(( $n + 1 ))
-                        echo "$n" >/etc/arca/counter
-                        if [ $(cat /etc/arca/counter) -eq 5 ]; then
-                                /usr/lib/rooter/gcom/gcom-locked /dev/ttyUSB2 run-at.gcom 1 "AT+CFUN=1,1"
-                                log "Modem module restarted"
-                        elif [ $(cat /etc/arca/counter) -ge 6 ]; then
-                                log "Modem disconnected. Check your SIM card"
-                                >/etc/arca/counter
-                                reboot
-                                exit 1
-                        fi
-                fi
+            log "Internet is working fine."
         fi
         sleep 30
-done
+    done
+}
+
+restart_wan_mm() {
+    local modem_id=$(mmcli -L | grep -o -E 'Modem\/[0-9]+' | cut -d'/' -f2)
+    if [ -z "$modem_id" ]; then
+        log "No modem detected via ModemManager"
+        return 1
+    fi
+    mmcli -m $modem_id --disable
+    sleep 2
+    mmcli -m $modem_id --enable
+    sleep 10
+    mmcli -m $modem_id --simple-connect="apn=$(uci get modem.modem1.apn)"
+    log "ModemManager WAN restarted for modem ID $modem_id"
+}
+
+monitor_connection
 EOF
 
-#Kill previous beta RC Script daemon
-if [ ! -z $(pgrep -f /etc/arca/restart_wan) ]; then
-        kill -9 $(pgrep -f /etc/arca/restart_wan)
+chmod +x /etc/arca/change_ip
+
+if pgrep -f /etc/arca/change_ip > /dev/null 2>&1; then
+    kill -9 $(pgrep -f /etc/arca/change_ip)
 fi
 
-#Kill currently running RC Script daemon
-if [ ! -z $(pgrep -f /etc/arca/change_ip) ]; then
-        kill -9 $(pgrep -f /etc/arca/change_ip)
-fi
-
-chmod 755 /etc/arca/change_ip
 /etc/arca/change_ip &
-echo "Done. You can close this terminal now"
+
+log "ModemManager auto-reconnect script initialized."
+echo "Done. You can close this terminal now."
 exit 0
